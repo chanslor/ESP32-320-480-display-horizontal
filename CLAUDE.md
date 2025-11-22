@@ -139,17 +139,42 @@ Both reset when full refresh occurs to keep them synchronized.
 - `ArduinoJson.h`: JSON parsing (requires v6+)
 - `TFT_eSPI.h`: ST7796 display driver (requires proper `User_Setup.h` configuration for ESP32-3248S035C)
 
+## Key Functions Reference
+
+Located in `ESP32-320-480-display-horizontal.ino`:
+
+- `setup()`: Initialize display, WiFi, fetch initial data (lines 73-96)
+- `loop()`: Check timers for API refresh (5min) or display update (60s) (lines 98-116)
+- `fetchRiverData()`: HTTP GET to API, parse JSON, populate rivers array (lines 176-263)
+- `displayRivers()`: Full screen redraw - header + all 6 river cards (lines 265-279)
+- `updateElapsedTimeDisplay()`: Partial update - only elapsed time in header (lines 320-326)
+- `drawRiverCard(int, int)`: Render single river card with status, name, level, flow, trend (lines 328-406)
+- `drawHeader()`: Render top bar with title and elapsed time (lines 281-298)
+- `connectWiFi()`: WiFi connection with 15-second timeout (lines 131-174)
+
 ## Important Constraints
 
 1. **Display Driver Configuration:** TFT_eSPI requires hardware-specific pin mappings in `User_Setup.h` (in Arduino libraries folder at `$HOME/Arduino/libraries/TFT_eSPI/User_Setup.h`). The ESP32-3248S035C uses:
    - Driver: ST7796 (NOT ILI9341 default)
-   - Specific GPIO pins for SPI communication (see README for detailed pin mapping)
+   - Required pin configuration:
+     ```cpp
+     #define TFT_MISO 12   // SPI MISO
+     #define TFT_MOSI 13   // SPI MOSI
+     #define TFT_SCLK 14   // SPI Clock
+     #define TFT_CS   15   // Chip select
+     #define TFT_DC    2   // Data/Command
+     #define TFT_RST  -1   // Reset (connected to EN)
+     #define TFT_BL   27   // Backlight
+     #define SPI_FREQUENCY 80000000  // 80MHz
+     ```
    - This is the most common source of "black screen" issues - verify configuration matches hardware
+   - See README section "Critical TFT_eSPI Configuration" for complete setup
 
 2. **River Order:** The 6-element array index must match the site_id mapping in `fetchRiverData()` (lines 210-217). Adding/removing rivers requires updating both:
-   - Array size declaration: `RiverData rivers[6]`
-   - Index mapping logic in the site_id conditional chain
-   - Display constants if changing count (RIVER_CARD_HEIGHT calculation)
+   - Array size declaration: `RiverData rivers[6]` (line 71)
+   - Index mapping logic in the site_id conditional chain (lines 212-217)
+   - Display name mapping in `drawRiverCard()` (lines 342-348)
+   - Display constants if changing count (RIVER_CARD_HEIGHT calculation may need adjustment)
 
 3. **Memory:** Uses `DynamicJsonDocument` with 8KB buffer (line 193). Increasing river count or adding more data fields may require larger buffer to avoid parse errors.
 
