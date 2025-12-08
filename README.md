@@ -40,6 +40,10 @@ This project displays real-time river level data from USGS monitoring stations o
 5. Short Creek (USGS 03574500)
 6. Mulberry Fork (USGS 02450000)
 
+<p align="center">
+  <img src="display-example.jpg" alt="River Levels Display Example" width="80%">
+</p>
+
 ## Hardware Requirements
 
 - **Board:** ESP32-3248S035C (Sunton/DIYmall)

@@ -56,13 +56,14 @@ The entire application is contained in `ESP32-320-480-display-horizontal.ino` - 
 - Weather: temperature, wind speed/direction
 - QPF: precipitation forecast for today/tomorrow
 - Metadata: site_id, name, timestamp
+- Thresholds: min/good values for both CFS and FT (from API)
 
-Fixed array of 6 rivers mapped by USGS site IDs:
+Fixed array of 6 rivers mapped by site IDs:
 - `02455000` - Locust Fork (index 0)
 - `03572900` - Town Creek (index 1)
 - `03572690` - South Sauty (index 2)
 - `02399200` - Little River (index 3)
-- `03574500` - Short Creek (index 4)
+- `1` - Short Creek (index 4) - custom site_id, not USGS
 - `02450000` - Mulberry Fork (index 5)
 
 ### Display System
@@ -71,11 +72,16 @@ Fixed array of 6 rivers mapped by USGS site IDs:
 - `HEADER_HEIGHT`: 30px (title + elapsed time)
 - `RIVER_CARD_HEIGHT`: 46px per river (6 cards fit vertically)
 
-**Color Scheme:**
-- Green (`COLOR_GOOD`): River in optimal range
-- Red (`COLOR_LOW`): Flow below minimum threshold
+**Color Scheme (based on API thresholds):**
+- Green (`COLOR_GOOD`): River at or above "good" threshold (in_range=true from API)
+- Yellow (`0xFFE0`): River between minimum and good thresholds
+- Red (`COLOR_LOW`): River below minimum threshold
 - Orange (`COLOR_WIND`): Wind alert (not currently used)
 - Light blue (`COLOR_COLD`): Cold alert (not currently used)
+
+**Threshold Types:** The API provides per-river thresholds in either CFS or FT:
+- CFS-based: Town Creek (min:180, good:250), Little River Canyon (min:300, good:500)
+- FT-based: Mulberry Fork (min:5.0, good:10.0), Locust Fork (min:1.7, good:2.5), South Sauty (min:8.34, good:8.9), Short Creek (min:0.5, good:1.0)
 
 **Rendering:**
 - `displayRivers()`: Full screen redraw (header + all 6 river cards)
@@ -89,6 +95,7 @@ Fixed array of 6 rivers mapped by USGS site IDs:
 - `site_id`, `name`, `flow`, `trend`, `stage_ft`, `in_range`, `timestamp`
 - `qpf` object: `today`, `tomorrow` (precipitation)
 - `weather` object: `temp_f`, `wind_mph`, `wind_dir`
+- `thresholds` object: `good_cfs`, `good_ft`, `min_cfs`, `min_ft` (null if not applicable)
 
 Uses `ArduinoJson` library with 8KB dynamic buffer for parsing.
 
@@ -143,14 +150,14 @@ Both reset when full refresh occurs to keep them synchronized.
 
 Located in `ESP32-320-480-display-horizontal.ino`:
 
-- `setup()`: Initialize display, WiFi, fetch initial data (lines 73-96)
-- `loop()`: Check timers for API refresh (5min) or display update (60s) (lines 98-116)
-- `fetchRiverData()`: HTTP GET to API, parse JSON, populate rivers array (lines 176-263)
-- `displayRivers()`: Full screen redraw - header + all 6 river cards (lines 265-279)
-- `updateElapsedTimeDisplay()`: Partial update - only elapsed time in header (lines 320-326)
-- `drawRiverCard(int, int)`: Render single river card with status, name, level, flow, trend (lines 328-406)
-- `drawHeader()`: Render top bar with title and elapsed time (lines 281-298)
-- `connectWiFi()`: WiFi connection with 15-second timeout (lines 131-174)
+- `setup()`: Initialize display, WiFi, fetch initial data (lines 79-102)
+- `loop()`: Check timers for API refresh (5min) or display update (60s) (lines 104-122)
+- `connectWiFi()`: WiFi connection with 15-second timeout (lines 137-180)
+- `fetchRiverData()`: HTTP GET to API, parse JSON, populate rivers array including thresholds (lines 182-293)
+- `displayRivers()`: Full screen redraw - header + all 6 river cards (lines 295-309)
+- `drawHeader()`: Render top bar with title and elapsed time (lines 311-328)
+- `updateElapsedTimeDisplay()`: Partial update - only elapsed time in header (lines 350-356)
+- `drawRiverCard(int, int)`: Render single river card with status color based on API thresholds (lines 358-449)
 
 ## Important Constraints
 
@@ -170,12 +177,14 @@ Located in `ESP32-320-480-display-horizontal.ino`:
    - This is the most common source of "black screen" issues - verify configuration matches hardware
    - See README section "Critical TFT_eSPI Configuration" for complete setup
 
-2. **River Order:** The 6-element array index must match the site_id mapping in `fetchRiverData()` (lines 210-217). Adding/removing rivers requires updating both:
-   - Array size declaration: `RiverData rivers[6]` (line 71)
-   - Index mapping logic in the site_id conditional chain (lines 212-217)
-   - Display name mapping in `drawRiverCard()` (lines 342-348)
+2. **River Order:** The 6-element array index must match the site_id mapping in `fetchRiverData()` (lines 216-223). Adding/removing rivers requires updating both:
+   - Array size declaration: `RiverData rivers[6]` (line 77)
+   - Index mapping logic in the site_id conditional chain (lines 218-223)
+   - Display name mapping in `drawRiverCard()` (lines 383-389)
    - Display constants if changing count (RIVER_CARD_HEIGHT calculation may need adjustment)
 
-3. **Memory:** Uses `DynamicJsonDocument` with 8KB buffer (line 193). Increasing river count or adding more data fields may require larger buffer to avoid parse errors.
+3. **Memory:** Uses `DynamicJsonDocument` with 8KB buffer (line 199). Increasing river count or adding more data fields may require larger buffer to avoid parse errors.
 
-4. **WiFi Credentials:** Project requires `secrets.h` file in project root. Use `secrets.h.example` as template. This file is gitignored for security.
+4. **Thresholds:** Status colors are determined by API-provided thresholds, not hardcoded values. Each river uses either CFS-based or FT-based thresholds (indicated by `has_cfs_thresholds` flag). The `in_range` field from API indicates "good" status; below-minimum is calculated locally using `min_cfs` or `min_ft`.
+
+5. **WiFi Credentials:** Project requires `secrets.h` file in project root. Use `secrets.h.example` as template. This file is gitignored for security.

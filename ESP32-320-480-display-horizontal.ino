@@ -66,6 +66,12 @@ struct RiverData {
   String wind_dir;
   bool in_range;
   String timestamp;
+  // Thresholds from API
+  float good_cfs;
+  float good_ft;
+  float min_cfs;
+  float min_ft;
+  bool has_cfs_thresholds;  // true if using cfs, false if using ft
 };
 
 RiverData rivers[6]; // Locust Fork, Town Creek, South Sauty, Little River, Short Creek, Mulberry Fork
@@ -213,7 +219,7 @@ void fetchRiverData() {
       else if (site_id == "03572900") index = 1; // Town Creek
       else if (site_id == "03572690") index = 2; // South Sauty
       else if (site_id == "02399200") index = 3; // Little River
-      else if (site_id == "03574500") index = 4; // Short Creek
+      else if (site_id == "1") index = 4; // Short Creek (custom site_id)
       else if (site_id == "02450000") index = 5; // Mulberry Fork
 
       if (index >= 0 && index < 6) {
@@ -244,6 +250,30 @@ void fetchRiverData() {
         }
         if (site["weather"].containsKey("wind_dir")) {
           rivers[index].wind_dir = site["weather"]["wind_dir"].as<String>();
+        }
+
+        // Threshold data from API
+        if (site.containsKey("thresholds")) {
+          JsonObject thresholds = site["thresholds"];
+
+          // Check if using CFS-based or FT-based thresholds
+          if (!thresholds["min_cfs"].isNull()) {
+            rivers[index].min_cfs = thresholds["min_cfs"];
+            rivers[index].good_cfs = thresholds["good_cfs"] | 0.0;
+            rivers[index].has_cfs_thresholds = true;
+          } else {
+            rivers[index].min_cfs = 0.0;
+            rivers[index].good_cfs = 0.0;
+            rivers[index].has_cfs_thresholds = false;
+          }
+
+          if (!thresholds["min_ft"].isNull()) {
+            rivers[index].min_ft = thresholds["min_ft"];
+            rivers[index].good_ft = thresholds["good_ft"] | 0.0;
+          } else {
+            rivers[index].min_ft = 0.0;
+            rivers[index].good_ft = 0.0;
+          }
         }
 
         Serial.print(rivers[index].name);
@@ -328,14 +358,26 @@ void updateElapsedTimeDisplay() {
 void drawRiverCard(int riverIndex, int y) {
   RiverData &river = rivers[riverIndex];
 
-  // Status color based on in_range
+  // Status color based on in_range and API thresholds
   uint16_t statusColor;
   if (river.in_range) {
-    statusColor = COLOR_GOOD;  // Green
-  } else if (river.flow.toInt() < 100) {
-    statusColor = COLOR_LOW;   // Red (too low)
+    statusColor = COLOR_GOOD;  // Green - at or above good level
   } else {
-    statusColor = 0xFFE0;      // Yellow (warning)
+    // Determine if below minimum using API thresholds
+    bool belowMin = false;
+    if (river.has_cfs_thresholds && river.min_cfs > 0) {
+      // Use CFS-based threshold
+      belowMin = river.flow.toInt() < river.min_cfs;
+    } else if (river.min_ft > 0) {
+      // Use FT-based threshold
+      belowMin = river.stage_ft < river.min_ft;
+    }
+
+    if (belowMin) {
+      statusColor = COLOR_LOW;   // Red (below minimum)
+    } else {
+      statusColor = 0xFFE0;      // Yellow (between min and good)
+    }
   }
 
   // River name (abbreviated)

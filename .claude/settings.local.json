@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(arduino-cli lib list:*)",
+      "Bash(arduino-cli lib search:*)",
+      "Bash(arduino-cli lib install:*)",
+      "Bash(arduino-cli config:*)",
+      "Bash(arduino-cli compile:*)",
+      "Bash(chmod:*)",
+      "Bash(arduino-cli upload:*)",
+      "Bash(python3 -m esptool:*)",
+      "Bash(pkill:*)",
+      "WebFetch(domain:docker-blue-sound-1751.fly.dev)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []
